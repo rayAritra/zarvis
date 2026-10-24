@@ -1,10 +1,13 @@
 import OpenAI from "openai";
 import { toolSchemas, getTool, parseArgs, runTool } from "./tools/index.js";
+import { Permissions } from "./permissions.js";
 
 type Msg = OpenAI.Chat.Completions.ChatCompletionMessageParam;
-export type Confirm = (question: string) => Promise<boolean>;
+export type Answer = "yes" | "no" | "always";
+export type Confirm = (question: string, canAlways: boolean) => Promise<Answer>;
 
 const client = new OpenAI({ baseURL: process.env.BASE_URL, apiKey: process.env.API_KEY });
+const permissions = new Permissions();
 
 const messages: Msg[] = [
   {
@@ -57,7 +60,13 @@ async function handleCall(name: string, rawArgs: string, confirm: Confirm): Prom
 
   console.log(`  → ${name} ${JSON.stringify(args).slice(0, 120)}`);
 
-  if (tool.risk !== "read") {
+  const verdict = permissions.check(tool, args);
+  if (verdict.decision === "deny") {
+    console.log(`  ✗ blocked: ${verdict.reason}`);
+    return `Error: blocked by the user's safety rules (${verdict.reason}). Do not try to work around this.`;
+  }
+
+  if (verdict.decision === "ask") {
     if (tool.preview) {
       try {
         console.log(await tool.preview(args));
@@ -65,9 +74,10 @@ async function handleCall(name: string, rawArgs: string, confirm: Confirm): Prom
         return `Error: ${(e as Error).message}`;
       }
     }
-    if (!(await confirm(`  Allow ${name}? (y/n) `))) {
-      return "The user denied this action. Ask them how they want to proceed.";
-    }
+    const always = verdict.ruleLabel ? `, a = always allow ${verdict.ruleLabel}` : "";
+    const answer = await confirm(`  Allow ${name}? (y = yes, n = no${always}) `, !!verdict.rule);
+    if (answer === "no") return "The user denied this action. Ask them how they want to proceed.";
+    if (answer === "always" && verdict.rule) permissions.remember(verdict.rule);
   }
 
   return runTool(tool, args);

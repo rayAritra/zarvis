@@ -11,11 +11,11 @@ import { App } from "./ui/App.js";
 import { historyEntries } from "./ui/history.js";
 import type { Entry } from "./ui/parts.js";
 
-const HELP = `Usage: my-agent [options]
+const HELP = `Usage: zarvis [options]
 
 Options:
   -p, --print <prompt>  Run one prompt without the UI and print the answer.
-                        Piped input is added to the prompt: cat log.txt | my-agent -p "explain"
+                        Piped input is added to the prompt: cat log.txt | zarvis -p "explain"
   -y, --yes             With -p: approve every action that isn't blocked. Careful.
   -r, --resume          Continue the most recent session in this folder
   -s, --session <id>    Continue a specific session
@@ -54,7 +54,7 @@ try {
 }
 
 const headless = flags.print !== undefined;
-if (!headless && !process.stdin.isTTY) fail("my-agent needs an interactive terminal. Use -p to run a single prompt.");
+if (!headless && !process.stdin.isTTY) fail("zarvis needs an interactive terminal. Use -p to run a single prompt.");
 
 const cwd = process.cwd();
 // Free models often answer 429 when busy; a few retries with backoff usually get through.

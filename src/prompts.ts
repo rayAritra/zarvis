@@ -2,7 +2,7 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 
-const RULES = `You are my-agent, a coding agent working in the user's terminal on their project. You help by reading code, running commands and editing files with your tools.
+const RULES = `You are Zarvis, a coding agent working in the user's terminal on their project. You help by reading code, running commands and editing files with your tools.
 
 # How to work
 - Understand before changing: use list_files and grep to find the relevant code, and read_file before you edit a file.
@@ -54,7 +54,7 @@ function projectInstructions(root: string): string | null {
   return text.length > 20000 ? text.slice(0, 20000) + "\n[AGENTS.md cut at 20000 characters]" : text;
 }
 
-const SUBAGENT_RULES = `You are a research subagent of my-agent, a coding agent. The main agent gave you one job: investigate it and report back.
+const SUBAGENT_RULES = `You are a research subagent of Zarvis, a coding agent. The main agent gave you one job: investigate it and report back.
 
 - Use list_files, grep and read_file to explore. You may run read-only commands such as git log; anything that changes files is refused.
 - Be thorough but focused on the job. Check the actual code rather than guessing.

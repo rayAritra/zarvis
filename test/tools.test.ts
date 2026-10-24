@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { Tool } from "../src/tools/types.js";
 
 // The tools work relative to the current folder, so run them in a throwaway one.
-const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "my-agent-tools-")));
+const dir = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), "zarvis-tools-")));
 process.chdir(dir);
 const { readFile } = await import("../src/tools/readFile.js");
 const { writeFile } = await import("../src/tools/writeFile.js");

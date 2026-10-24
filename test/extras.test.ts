@@ -92,7 +92,7 @@ describe("headless mode", () => {
     });
     const { client } = fakeClient([[{ tool: "change", args: {} }], "All done."]);
     const agent = new Agent({ client, model: "fake", system: "s", tools: [change] });
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "my-agent-headless-"));
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "zarvis-headless-"));
     dirs.push(dir);
     const session = Session.create(process.cwd(), "fake", dir);
     const out: string[] = [];

@@ -3,11 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 
-// The folder my-agent is installed in: one up from src/ when developing, or from dist/ when built.
+// The folder zarvis is installed in: one up from src/ when developing, or from dist/ when built.
 export const PACKAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-// Everything my-agent stores lives here. MY_AGENT_HOME overrides it (the tests use that).
-export const HOME_DIR = process.env.MY_AGENT_HOME ?? path.join(os.homedir(), ".my-agent");
+// Everything zarvis stores lives here. ZARVIS_HOME overrides it (the tests use that).
+export const HOME_DIR = process.env.ZARVIS_HOME ?? path.join(os.homedir(), ".zarvis");
 
 export interface Config {
   baseURL: string;
@@ -16,7 +16,7 @@ export interface Config {
   contextTokens?: number;
 }
 
-// Settings come from the environment, then my-agent's own .env, then ~/.my-agent/.env.
+// Settings come from the environment, then zarvis's own .env, then ~/.zarvis/.env.
 // The .env of the project you're working in is deliberately not read: its keys belong to that project.
 export function loadConfig(): Config {
   const files = [path.join(PACKAGE_DIR, ".env"), path.join(HOME_DIR, ".env")];

@@ -27,7 +27,7 @@ export function App({ agent, model, session, intro = [] }: Props) {
   const withId = (e: Entry): Item => ({ ...e, id: nextId.current++ });
 
   const [items, setItems] = useState<Item[]>(() => [
-    withId({ kind: "info", text: `my-agent · ${model} · ${process.cwd()}` }),
+    withId({ kind: "info", text: `zarvis · ${model} · ${process.cwd()}` }),
     withId({ kind: "info", text: "Enter to send · Esc or Ctrl+C stops a task · Ctrl+C at the prompt quits · /help" }),
     ...intro.map(withId),
   ]);

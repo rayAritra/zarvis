@@ -1,5 +1,5 @@
 {
-  "name": "my_agent",
+  "name": "zarvis",
   "version": "1.0.0",
   "description": "A coding agent for your terminal",
   "scripts": {
@@ -34,7 +34,7 @@
     "vitest": "^5.0.5"
   },
   "bin": {
-    "my-agent": "dist/cli.js"
+    "zarvis": "dist/cli.js"
   },
   "files": [
     "dist"

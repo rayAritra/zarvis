@@ -7,7 +7,7 @@ import { splitPoint } from "../src/compact.js";
 
 const dirs: string[] = [];
 const tempDir = () => {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), "my-agent-sessions-"));
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "zarvis-sessions-"));
   dirs.push(d);
   return d;
 };

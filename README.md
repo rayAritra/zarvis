@@ -1,4 +1,4 @@
-# zarvis (my-agent)
+# Zarvis
 
 A coding agent for your terminal. It reads your code, runs commands and edits files, asking before it changes anything. It works with any OpenAI-compatible API, including OpenRouter's free models.
 
@@ -8,9 +8,9 @@ A coding agent for your terminal. It reads your code, runs commands and edits fi
 - **Permissions:** read-only commands like `ls`, `git status` and `npm test` run without asking. Edits and other commands ask first, with an "always allow" option. Dangerous commands (`sudo`, `rm -rf /`, `git push --force`, `curl … | sh`) are always blocked.
 - **Terminal UI:** answers stream in live, diffs are colored, and a plan checklist shows progress. Esc or Ctrl+C stops a running task.
 - **Long conversations:** older messages are summarized automatically when the context fills up (`/compact` does it on demand).
-- **Sessions:** every conversation is saved, and `my-agent --resume` picks up where you left off.
+- **Sessions:** every conversation is saved, and `zarvis --resume` picks up where you left off.
 - **Subagents:** broad research goes to a separate read-only agent, so it doesn't fill the main conversation.
-- **Headless mode:** `my-agent -p "…"` for scripts and pipes.
+- **Headless mode:** `zarvis -p "…"` for scripts and pipes.
 - **Project instructions:** put an `AGENTS.md` in your project and the agent follows it.
 
 ## Setup
@@ -21,10 +21,10 @@ Requires Node 22+ and, on Windows, [Git for Windows](https://git-scm.com/downloa
 git clone https://github.com/rayAritra/zarvis.git
 cd zarvis
 npm install
-npm link        # makes the `my-agent` command available everywhere
+npm link        # makes the `zarvis` command available everywhere
 ```
 
-Put your settings in `~/.my-agent/.env`, or in `.env` inside the cloned folder:
+Copy `.env.example` to `.env` inside the cloned folder (or to `~/.zarvis/.env`) and fill in your key:
 
 ```
 BASE_URL=https://openrouter.ai/api/v1
@@ -38,11 +38,11 @@ The `.env` of the project you're working in is never read, so its keys stay with
 
 ```bash
 cd your-project
-my-agent                     # interactive
-my-agent --resume            # continue the last conversation in this folder
-my-agent -p "why does npm test fail?"
-cat error.log | my-agent -p "explain this"
-my-agent -p "fix the failing test" --yes    # approve every action that isn't blocked
+zarvis                     # interactive
+zarvis --resume            # continue the last conversation in this folder
+zarvis -p "why does npm test fail?"
+cat error.log | zarvis -p "explain this"
+zarvis -p "fix the failing test" --yes    # approve every action that isn't blocked
 ```
 
 In the UI, type `/help` for commands (`/clear`, `/compact`, `/exit`).

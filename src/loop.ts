@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { toolSchemas, getTool, parseArgs, runTool } from "./tools/index.js";
 import { Permissions } from "./permissions.js";
+import { buildSystemPrompt } from "./prompts.js";
 
 type Msg = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 export type Answer = "yes" | "no" | "always";
@@ -9,16 +10,7 @@ export type Confirm = (question: string, canAlways: boolean) => Promise<Answer>;
 const client = new OpenAI({ baseURL: process.env.BASE_URL, apiKey: process.env.API_KEY });
 const permissions = new Permissions();
 
-const messages: Msg[] = [
-  {
-    role: "system",
-    content:
-      `You are a coding agent running in the user's terminal. Working directory: ${process.cwd()}. ` +
-      `OS: ${process.platform}. The bash tool uses a bash shell. ` +
-      `Explore with list_files and grep, read files before editing them, prefer edit_file over write_file, ` +
-      `and run tests after changes. Keep answers short.`,
-  },
-];
+const messages: Msg[] = [{ role: "system", content: buildSystemPrompt() }];
 
 export async function runTurn(userInput: string, confirm: Confirm) {
   messages.push({ role: "user", content: userInput });

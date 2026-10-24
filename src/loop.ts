@@ -51,6 +51,11 @@ export class Agent {
     this.messages = [{ role: "system", content: opts.system ?? buildSystemPrompt() }];
   }
 
+  // Starts a new conversation. "Always allow" answers are kept.
+  reset() {
+    this.messages = [{ role: "system", content: this.opts.system ?? buildSystemPrompt() }];
+  }
+
   // Runs one user turn until the model stops calling tools. Returns the final answer text.
   // If the signal fires, the turn stops and the history is left valid for the next turn.
   async run(input: string, ev: AgentEvents, signal?: AbortSignal): Promise<string> {

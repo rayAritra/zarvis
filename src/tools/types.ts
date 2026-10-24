@@ -4,12 +4,16 @@ import { z } from "zod";
 
 export type Risk = "read" | "write" | "exec";
 
+export interface ToolContext {
+  signal?: AbortSignal;
+}
+
 export interface Tool<S extends z.ZodType = z.ZodType> {
   name: string;
   description: string;
   schema: S;
   risk: Risk;
-  execute: (args: z.infer<S>) => Promise<string>;
+  execute: (args: z.infer<S>, ctx: ToolContext) => Promise<string>;
   preview?: (args: z.infer<S>) => Promise<string>;
 }
 

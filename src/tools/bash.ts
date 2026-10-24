@@ -15,13 +15,13 @@ export const bash = defineTool({
     command: z.string().describe("The command to run"),
     timeout: z.number().int().max(600).default(120).describe("Timeout in seconds"),
   }),
-  execute({ command, timeout }) {
+  execute({ command, timeout }, { signal }) {
     return new Promise((resolve) => {
       const child = exec(
         command,
-        { cwd: ROOT, shell: SHELL, timeout: timeout * 1000, maxBuffer: 10 * 1024 * 1024 },
+        { cwd: ROOT, shell: SHELL, timeout: timeout * 1000, maxBuffer: 10 * 1024 * 1024, signal },
         (err, stdout, stderr) => {
-          const code = err ? (err.killed ? "timed out" : err.code ?? 1) : 0;
+          const code = signal?.aborted ? "interrupted by user" : err ? (err.killed ? "timed out" : err.code ?? 1) : 0;
           let out = `exit code: ${code}\n${stdout}`;
           if (stderr) out += `\n[stderr]\n${stderr}`;
           resolve(truncate(out));

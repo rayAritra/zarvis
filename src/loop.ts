@@ -1,76 +1,166 @@
-import OpenAI from "openai";
-import { toolSchemas, getTool, parseArgs, runTool } from "./tools/index.js";
+import type OpenAI from "openai";
+import { tools as defaultTools, toolSchemas, parseArgs, runTool } from "./tools/index.js";
+import type { Tool } from "./tools/types.js";
 import { Permissions } from "./permissions.js";
 import { buildSystemPrompt } from "./prompts.js";
 
-type Msg = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+export type Msg = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 export type Answer = "yes" | "no" | "always";
-export type Confirm = (question: string, canAlways: boolean) => Promise<Answer>;
 
-const client = new OpenAI({ baseURL: process.env.BASE_URL, apiKey: process.env.API_KEY });
-const permissions = new Permissions();
-
-const messages: Msg[] = [{ role: "system", content: buildSystemPrompt() }];
-
-export async function runTurn(userInput: string, confirm: Confirm) {
-  messages.push({ role: "user", content: userInput });
-
-  for (let step = 0; step < 25; step++) {
-    const res = await client.chat.completions.create({
-      model: process.env.MODEL!,
-      messages,
-      tools: toolSchemas,
-    });
-
-    const msg = res.choices[0].message;
-    messages.push(msg);
-
-    if (!msg.tool_calls?.length) {
-      console.log(`\n${msg.content ?? ""}\n`);
-      return;
-    }
-
-    for (const call of msg.tool_calls) {
-      if (call.type !== "function") continue;
-      const result = await handleCall(call.function.name, call.function.arguments, confirm);
-      messages.push({ role: "tool", tool_call_id: call.id, content: result });
-    }
-  }
-  console.log("Stopped after 25 steps.");
+export interface ApprovalRequest {
+  tool: string;
+  args: any;
+  preview?: string;
+  ruleLabel?: string; // set when "always allow" is possible
 }
 
-async function handleCall(name: string, rawArgs: string, confirm: Confirm): Promise<string> {
-  const tool = getTool(name);
-  if (!tool) return `Error: unknown tool "${name}".`;
+// How the agent reports what it's doing. The terminal UI, headless mode and tests each implement this.
+export interface AgentEvents {
+  onText(delta: string): void;
+  onToolCall(name: string, args: any): void;
+  onToolResult(name: string, result: string): void;
+  onBlocked(name: string, reason: string): void;
+  confirm(req: ApprovalRequest, signal?: AbortSignal): Promise<Answer>;
+}
 
-  let args: any;
-  try {
-    args = parseArgs(tool, rawArgs);
-  } catch (e) {
-    return `Error: ${(e as Error).message}`;
+export interface AgentOptions {
+  client: OpenAI;
+  model: string;
+  tools?: Tool<any>[];
+  system?: string;
+  maxSteps?: number;
+  permissions?: Permissions;
+}
+
+interface PendingCall {
+  id: string;
+  name: string;
+  args: string;
+}
+
+export class Agent {
+  messages: Msg[];
+  readonly permissions: Permissions;
+  private tools: Tool<any>[];
+  private byName: Map<string, Tool<any>>;
+
+  constructor(private opts: AgentOptions) {
+    this.tools = opts.tools ?? defaultTools;
+    this.byName = new Map(this.tools.map((t) => [t.name, t]));
+    this.permissions = opts.permissions ?? new Permissions();
+    this.messages = [{ role: "system", content: opts.system ?? buildSystemPrompt() }];
   }
 
-  console.log(`  → ${name} ${JSON.stringify(args).slice(0, 120)}`);
+  // Runs one user turn until the model stops calling tools. Returns the final answer text.
+  // If the signal fires, the turn stops and the history is left valid for the next turn.
+  async run(input: string, ev: AgentEvents, signal?: AbortSignal): Promise<string> {
+    this.messages.push({ role: "user", content: input });
+    const maxSteps = this.opts.maxSteps ?? 25;
 
-  const verdict = permissions.check(tool, args);
-  if (verdict.decision === "deny") {
-    console.log(`  ✗ blocked: ${verdict.reason}`);
-    return `Error: blocked by the user's safety rules (${verdict.reason}). Do not try to work around this.`;
-  }
+    for (let step = 0; step < maxSteps; step++) {
+      const { content, calls } = await this.callModel(ev, signal);
+      if (signal?.aborted) return content;
+      if (!calls.length) return content;
 
-  if (verdict.decision === "ask") {
-    if (tool.preview) {
+      const results = new Map<string, string>();
       try {
-        console.log(await tool.preview(args));
-      } catch (e) {
-        return `Error: ${(e as Error).message}`;
+        for (const call of calls) {
+          if (signal?.aborted) break;
+          results.set(call.id, await this.handleCall(call, ev, signal));
+        }
+      } catch (err) {
+        if (!signal?.aborted) throw err;
+      } finally {
+        // Every tool call needs a result, or the next request is rejected.
+        for (const call of calls) {
+          const content = results.get(call.id) ?? "Interrupted by the user before this ran.";
+          this.messages.push({ role: "tool", tool_call_id: call.id, content });
+        }
       }
+      if (signal?.aborted) return "";
     }
-    const always = verdict.ruleLabel ? `, a = always allow ${verdict.ruleLabel}` : "";
-    const answer = await confirm(`  Allow ${name}? (y = yes, n = no${always}) `, !!verdict.rule);
-    if (answer === "no") return "The user denied this action. Ask them how they want to proceed.";
-    if (answer === "always" && verdict.rule) permissions.remember(verdict.rule);
+    const note = `Stopped after ${maxSteps} steps.`;
+    ev.onText(`\n${note}`);
+    return note;
   }
 
-  return runTool(tool, args);
+  private async callModel(ev: AgentEvents, signal?: AbortSignal) {
+    let content = "";
+    const calls: PendingCall[] = [];
+
+    try {
+      const stream = await this.opts.client.chat.completions.create(
+        { model: this.opts.model, messages: this.messages, tools: toolSchemas(this.tools), stream: true },
+        { signal },
+      );
+      for await (const chunk of stream) {
+        const delta = chunk.choices[0]?.delta;
+        if (!delta) continue;
+        if (delta.content) {
+          content += delta.content;
+          ev.onText(delta.content);
+        }
+        for (const tc of delta.tool_calls ?? []) {
+          const c = (calls[tc.index] ??= { id: "", name: "", args: "" });
+          if (tc.id) c.id = tc.id;
+          if (tc.function?.name) c.name ||= tc.function.name;
+          if (tc.function?.arguments) c.args += tc.function.arguments;
+        }
+      }
+    } catch (err) {
+      if (!signal?.aborted) throw err;
+      // Keep what was said so far, so the model knows where it was cut off.
+      this.messages.push({ role: "assistant", content: `${content}\n[interrupted by the user]` });
+      return { content, calls: [] };
+    }
+
+    const done = calls.filter(Boolean);
+    done.forEach((c, i) => (c.id ||= `call_${Date.now()}_${i}`));
+    this.messages.push({
+      role: "assistant",
+      content: content || null,
+      ...(done.length && {
+        tool_calls: done.map((c) => ({ id: c.id, type: "function" as const, function: { name: c.name, arguments: c.args } })),
+      }),
+    });
+    return { content, calls: done };
+  }
+
+  private async handleCall(call: PendingCall, ev: AgentEvents, signal?: AbortSignal): Promise<string> {
+    const tool = this.byName.get(call.name);
+    if (!tool) return `Error: unknown tool "${call.name}".`;
+
+    let args: any;
+    try {
+      args = parseArgs(tool, call.args);
+    } catch (e) {
+      return `Error: ${(e as Error).message}`;
+    }
+
+    ev.onToolCall(tool.name, args);
+
+    const verdict = this.permissions.check(tool, args);
+    if (verdict.decision === "deny") {
+      ev.onBlocked(tool.name, verdict.reason!);
+      return `Error: blocked by the user's safety rules (${verdict.reason}). Do not try to work around this.`;
+    }
+
+    if (verdict.decision === "ask") {
+      let preview: string | undefined;
+      if (tool.preview) {
+        try {
+          preview = await tool.preview(args);
+        } catch (e) {
+          return `Error: ${(e as Error).message}`;
+        }
+      }
+      const answer = await ev.confirm({ tool: tool.name, args, preview, ruleLabel: verdict.rule && verdict.ruleLabel }, signal);
+      if (answer === "no") return "The user denied this action. Ask them how they want to proceed.";
+      if (answer === "always" && verdict.rule) this.permissions.remember(verdict.rule);
+    }
+
+    const result = await runTool(tool, args, { signal });
+    ev.onToolResult(tool.name, result);
+    return result;
+  }
 }

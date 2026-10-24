@@ -20,6 +20,7 @@ export interface AgentEvents {
   onText(delta: string): void;
   onToolCall(name: string, args: any): void;
   onToolResult(name: string, result: string): void;
+  onToolProgress?(name: string, text: string): void;
   onBlocked(name: string, reason: string): void;
   confirm(req: ApprovalRequest, signal?: AbortSignal): Promise<Answer>;
   onCompact?(beforeTokens: number, afterTokens: number): void;
@@ -34,6 +35,8 @@ export interface AgentOptions {
   permissions?: Permissions;
   // The model's context window. Older messages are summarized at 75% of it.
   contextTokens?: number;
+  // What the model is told when an action is refused.
+  denyMessage?: string;
 }
 
 interface PendingCall {
@@ -189,11 +192,11 @@ export class Agent {
         }
       }
       const answer = await ev.confirm({ tool: tool.name, args, preview, ruleLabel: verdict.rule && verdict.ruleLabel }, signal);
-      if (answer === "no") return "The user denied this action. Ask them how they want to proceed.";
+      if (answer === "no") return this.opts.denyMessage ?? "The user denied this action. Ask them how they want to proceed.";
       if (answer === "always" && verdict.rule) this.permissions.remember(verdict.rule);
     }
 
-    const result = await runTool(tool, args, { signal });
+    const result = await runTool(tool, args, { signal, onProgress: (text) => ev.onToolProgress?.(tool.name, text) });
     ev.onToolResult(tool.name, result);
     return result;
   }

@@ -1,28 +1,30 @@
 import { Box, Text } from "ink";
 import type { ApprovalRequest } from "../loop.js";
+import type { Todo } from "../tools/todo.js";
+import { describeArgs, describeResult } from "../format.js";
 
 export type Entry =
   | { kind: "user" | "assistant" | "info" | "error"; text: string }
   | { kind: "tool"; name: string; args: any }
   | { kind: "result"; name: string; text: string }
+  | { kind: "progress"; text: string }
   | { kind: "blocked"; text: string }
   | { kind: "diff"; text: string };
 
-// The one argument that best describes a tool call, e.g. the command for bash.
-function describeArgs(name: string, args: any): string {
-  const main = args.command ?? args.path ?? args.pattern ?? args.description;
-  const text = typeof main === "string" ? main : JSON.stringify(args);
-  const extra = name === "grep" && args.glob && args.glob !== "**/*" ? `  in ${args.glob}` : "";
-  return (text + extra).replace(/\s+/g, " ").slice(0, 160);
-}
-
-function describeResult(name: string, text: string): string {
-  if (text.startsWith("Error:")) return text.split("\n")[0];
-  const lines = text.split("\n").filter(Boolean);
-  if (name === "bash") return `${lines[0]}${lines.length > 1 ? `, ${lines.length - 1} lines of output` : ""}`;
-  if (name === "read_file") return `${lines.length} lines`;
-  if (name === "list_files" || name === "grep") return lines.length === 1 ? lines[0] : `${lines.length} results`;
-  return lines[0]?.slice(0, 160) ?? "";
+export function TodoList({ todos }: { todos: Todo[] }) {
+  return (
+    <Box flexDirection="column" marginLeft={2}>
+      {todos.map((t, i) =>
+        t.status === "completed" ? (
+          <Text key={i} color="green" dimColor strikethrough>{"☑ " + t.content}</Text>
+        ) : t.status === "in_progress" ? (
+          <Text key={i} color="yellow" bold>{"◐ " + t.content}</Text>
+        ) : (
+          <Text key={i}>{"☐ " + t.content}</Text>
+        ),
+      )}
+    </Box>
+  );
 }
 
 // Renders **bold** and `code` inside one line.
@@ -96,6 +98,17 @@ export function EntryView({ entry }: { entry: Entry }) {
         </Box>
       );
     case "tool":
+      if (entry.name === "todo_write" && Array.isArray(entry.args.todos)) {
+        return (
+          <Box flexDirection="column" marginTop={1}>
+            <Text>
+              <Text color="yellow">{"● "}</Text>
+              <Text bold>Plan</Text>
+            </Text>
+            <TodoList todos={entry.args.todos} />
+          </Box>
+        );
+      }
       return (
         <Box marginTop={1}>
           <Text color="yellow">{"● "}</Text>
@@ -110,6 +123,8 @@ export function EntryView({ entry }: { entry: Entry }) {
           {describeResult(entry.name, entry.text)}
         </Text>
       );
+    case "progress":
+      return <Text dimColor>{"    ↳ " + entry.text}</Text>;
     case "blocked":
       return <Text color="red">{"  ✗ blocked: "}{entry.text}</Text>;
     case "diff":

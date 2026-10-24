@@ -4,7 +4,8 @@ import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
 import type { Agent, AgentEvents, Answer, ApprovalRequest } from "../loop.js";
 import type { Session } from "../session.js";
-import { ApprovalBox, EntryView, Markdown, type Entry } from "./parts.js";
+import type { Todo } from "../tools/todo.js";
+import { ApprovalBox, EntryView, Markdown, TodoList, type Entry } from "./parts.js";
 
 interface Pending {
   req: ApprovalRequest;
@@ -35,6 +36,7 @@ export function App({ agent, model, session, intro = [] }: Props) {
   const [busy, setBusy] = useState(false);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<Pending | null>(null);
+  const [todos, setTodos] = useState<Todo[]>([]);
   const turn = useRef<AbortController | null>(null);
 
   const add = (e: Entry) => setItems((prev) => [...prev, withId(e)]);
@@ -55,8 +57,11 @@ export function App({ agent, model, session, intro = [] }: Props) {
     onToolCall(name, args) {
       flush();
       add({ kind: "tool", name, args });
+      if (name === "todo_write") setTodos(args.todos);
     },
-    onToolResult: (name, text) => add({ kind: "result", name, text }),
+    // The plan draws itself, so its result line would only repeat it.
+    onToolResult: (name, text) => (name !== "todo_write" || text.startsWith("Error:")) && add({ kind: "result", name, text }),
+    onToolProgress: (_name, text) => add({ kind: "progress", text }),
     onBlocked: (_name, text) => add({ kind: "blocked", text }),
     onCompact(before, after) {
       flush();
@@ -89,6 +94,7 @@ export function App({ agent, model, session, intro = [] }: Props) {
     }
     if (text === "/clear") {
       agent.reset();
+      setTodos([]);
       add({ kind: "info", text: "Started a new conversation." });
       return;
     }
@@ -157,11 +163,14 @@ export function App({ agent, model, session, intro = [] }: Props) {
       {pending ? (
         <ApprovalBox req={pending.req} />
       ) : busy ? (
-        <Box marginTop={1}>
-          <Text color="cyan">
-            <Spinner type="dots" />
-          </Text>
-          <Text dimColor> working… (esc to stop)</Text>
+        <Box flexDirection="column" marginTop={1}>
+          {todos.some((t) => t.status !== "completed") && <TodoList todos={todos} />}
+          <Box>
+            <Text color="cyan">
+              <Spinner type="dots" />
+            </Text>
+            <Text dimColor> working… (esc to stop)</Text>
+          </Box>
         </Box>
       ) : (
         <Box borderStyle="round" borderColor="gray" paddingX={1} marginTop={1}>

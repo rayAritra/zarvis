@@ -7,8 +7,9 @@ import { grep } from "./grep.js";
 import { bash } from "./bash.js";
 import { writeFile } from "./writeFile.js";
 import { editFile } from "./editFile.js";
+import { todoWrite } from "./todo.js";
 
-export const tools: Tool<any>[] = [readFile, listFiles, grep, bash, writeFile, editFile];
+export const tools: Tool<any>[] = [readFile, listFiles, grep, bash, writeFile, editFile, todoWrite];
 
 // Converts each zod schema into the JSON Schema format the model needs.
 export function toolSchemas(list: Tool<any>[]): OpenAI.Chat.Completions.ChatCompletionTool[] {

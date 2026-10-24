@@ -13,6 +13,8 @@ const RULES = `You are my-agent, a coding agent working in the user's terminal o
 - If the user denies an action, don't retry it or work around it. Ask how they want to proceed.
 - Never run interactive commands (editors, prompts, REPLs) or long-running servers; they hang.
 - When a request is genuinely ambiguous, ask. Otherwise make a sensible choice and mention it.
+- For work with three or more steps, plan it with todo_write first and keep the list up to date as you go. Skip it for quick tasks.
+- For broad research (where is X handled, how does Y work across the codebase), use the task tool to send a subagent, so the search doesn't fill your context. Do small, targeted lookups yourself.
 
 # Safety
 - Stay inside the project folder. Don't read or print secrets such as .env files or API keys unless the user asks.
@@ -52,15 +54,29 @@ function projectInstructions(root: string): string | null {
   return text.length > 20000 ? text.slice(0, 20000) + "\n[AGENTS.md cut at 20000 characters]" : text;
 }
 
-export function buildSystemPrompt(root = process.cwd()): string {
+const SUBAGENT_RULES = `You are a research subagent of my-agent, a coding agent. The main agent gave you one job: investigate it and report back.
+
+- Use list_files, grep and read_file to explore. You may run read-only commands such as git log; anything that changes files is refused.
+- Be thorough but focused on the job. Check the actual code rather than guessing.
+- Your final message is the only thing the main agent sees. Make it a concise report: what you found, with path:line references, and anything you couldn't determine.`;
+
+function context(root: string): string[] {
   const env = [
     `Working directory: ${root}`,
     `OS: ${process.platform}. The bash tool runs commands in a bash shell${process.platform === "win32" ? " (Git Bash)" : ""}.`,
     `Today's date: ${new Date().toLocaleDateString("en-CA")}`,
   ].join("\n");
 
-  const parts = [RULES, `# Environment\n${env}`, `# Git\n${gitSummary(root)}`];
+  const parts = [`# Environment\n${env}`, `# Git\n${gitSummary(root)}`];
   const agents = projectInstructions(root);
   if (agents) parts.push(`# Project instructions (from AGENTS.md)\nFollow these; they override the defaults above.\n\n${agents}`);
-  return parts.join("\n\n");
+  return parts;
+}
+
+export function buildSystemPrompt(root = process.cwd()): string {
+  return [RULES, ...context(root)].join("\n\n");
+}
+
+export function buildSubagentPrompt(root = process.cwd()): string {
+  return [SUBAGENT_RULES, ...context(root)].join("\n\n");
 }

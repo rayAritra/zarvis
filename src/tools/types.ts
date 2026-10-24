@@ -6,6 +6,8 @@ export type Risk = "read" | "write" | "exec";
 
 export interface ToolContext {
   signal?: AbortSignal;
+  // For tools that take a while (subagents), to show what they're doing.
+  onProgress?: (text: string) => void;
 }
 
 export interface Tool<S extends z.ZodType = z.ZodType> {

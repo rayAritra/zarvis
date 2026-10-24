@@ -3,6 +3,7 @@ import { Box, Static, Text, useApp, useInput } from "ink";
 import TextInput from "ink-text-input";
 import Spinner from "ink-spinner";
 import type { Agent, AgentEvents, Answer, ApprovalRequest } from "../loop.js";
+import type { Session } from "../session.js";
 import { ApprovalBox, EntryView, Markdown, type Entry } from "./parts.js";
 
 interface Pending {
@@ -12,7 +13,14 @@ interface Pending {
 
 type Item = Entry & { id: number };
 
-export function App({ agent, model, intro = [] }: { agent: Agent; model: string; intro?: Entry[] }) {
+interface Props {
+  agent: Agent;
+  model: string;
+  session?: Session;
+  intro?: Entry[];
+}
+
+export function App({ agent, model, session, intro = [] }: Props) {
   const { exit } = useApp();
   const nextId = useRef(0);
   const withId = (e: Entry): Item => ({ ...e, id: nextId.current++ });
@@ -50,6 +58,10 @@ export function App({ agent, model, intro = [] }: { agent: Agent; model: string;
     },
     onToolResult: (name, text) => add({ kind: "result", name, text }),
     onBlocked: (_name, text) => add({ kind: "blocked", text }),
+    onCompact(before, after) {
+      flush();
+      add({ kind: "info", text: `Compacted the conversation: ~${before.toLocaleString()} → ~${after.toLocaleString()} tokens.` });
+    },
     confirm(req, signal) {
       if (req.preview) add({ kind: "diff", text: req.preview });
       return new Promise((resolve) => {
@@ -69,7 +81,10 @@ export function App({ agent, model, intro = [] }: { agent: Agent; model: string;
     if (!text) return;
     if (text === "exit" || text === "/exit") return exit();
     if (text === "/help") {
-      add({ kind: "info", text: "Commands: /clear starts a new conversation, /exit quits. Anything else is sent to the agent." });
+      add({
+        kind: "info",
+        text: "Commands: /clear starts a new conversation, /compact summarizes older messages, /exit quits. Anything else is sent to the agent.",
+      });
       return;
     }
     if (text === "/clear") {
@@ -78,20 +93,39 @@ export function App({ agent, model, intro = [] }: { agent: Agent; model: string;
       return;
     }
 
+    if (text === "/compact") {
+      await runBusy(async (signal) => {
+        if (!(await agent.compact(events, signal))) add({ kind: "info", text: "Nothing to compact yet." });
+      });
+      return;
+    }
+
     add({ kind: "user", text });
+    await runBusy(async (signal) => {
+      await agent.run(text, events, signal);
+      flush();
+      if (signal.aborted) add({ kind: "info", text: "Interrupted." });
+    });
+  }
+
+  // Runs one task with the spinner showing, then saves the session.
+  async function runBusy(task: (signal: AbortSignal) => Promise<void>) {
     setBusy(true);
     const ac = new AbortController();
     turn.current = ac;
     try {
-      await agent.run(text, events, ac.signal);
-      flush();
-      if (ac.signal.aborted) add({ kind: "info", text: "Interrupted." });
+      await task(ac.signal);
     } catch (err) {
       flush();
-      add({ kind: "error", text: (err as Error).message });
+      add({ kind: ac.signal.aborted ? "info" : "error", text: ac.signal.aborted ? "Interrupted." : (err as Error).message });
     } finally {
       turn.current = null;
       setBusy(false);
+      try {
+        session?.save(agent.messages);
+      } catch (err) {
+        add({ kind: "error", text: `Couldn't save the session: ${(err as Error).message}` });
+      }
     }
   }
 

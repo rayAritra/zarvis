@@ -66,7 +66,7 @@ export function Markdown({ text }: { text: string }) {
 
 export function Diff({ text, max = 60 }: { text: string; max?: number }) {
   // Drop the "Index:", "====", "---" and "+++" header lines; the tool line above already names the file.
-  const lines = text.split("\n").filter((l) => !/^(Index:|={5,}|--- |\+\+\+ )/.test(l) && l !== "\\ No newline at end of file");
+  const lines = text.trimEnd().split("\n").filter((l) => !/^(Index:|={5,}|--- |\+\+\+ )/.test(l) && l !== "\\ No newline at end of file");
   const shown = lines.slice(0, max);
   return (
     <Box flexDirection="column" marginLeft={2}>

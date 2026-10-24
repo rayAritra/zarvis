@@ -3,6 +3,7 @@ import { tools as defaultTools, toolSchemas, parseArgs, runTool } from "./tools/
 import type { Tool } from "./tools/types.js";
 import { Permissions } from "./permissions.js";
 import { buildSystemPrompt } from "./prompts.js";
+import { compactMessages, estimateTokens } from "./compact.js";
 
 export type Msg = OpenAI.Chat.Completions.ChatCompletionMessageParam;
 export type Answer = "yes" | "no" | "always";
@@ -21,6 +22,7 @@ export interface AgentEvents {
   onToolResult(name: string, result: string): void;
   onBlocked(name: string, reason: string): void;
   confirm(req: ApprovalRequest, signal?: AbortSignal): Promise<Answer>;
+  onCompact?(beforeTokens: number, afterTokens: number): void;
 }
 
 export interface AgentOptions {
@@ -30,6 +32,8 @@ export interface AgentOptions {
   system?: string;
   maxSteps?: number;
   permissions?: Permissions;
+  // The model's context window. Older messages are summarized at 75% of it.
+  contextTokens?: number;
 }
 
 interface PendingCall {
@@ -56,6 +60,23 @@ export class Agent {
     this.messages = [{ role: "system", content: this.opts.system ?? buildSystemPrompt() }];
   }
 
+  // Continues a saved conversation, with a fresh system prompt (git status may have changed since).
+  load(saved: Msg[]) {
+    this.reset();
+    this.messages.push(...saved.filter((m) => m.role !== "system"));
+  }
+
+  // Summarizes older messages. Returns false when there was too little to summarize.
+  async compact(ev?: Pick<AgentEvents, "onCompact">, signal?: AbortSignal): Promise<boolean> {
+    const limit = this.opts.contextTokens ?? 100_000;
+    const before = estimateTokens(this.messages);
+    const next = await compactMessages(this.opts.client, this.opts.model, this.messages, limit * 0.25, signal);
+    if (!next) return false;
+    this.messages = next;
+    ev?.onCompact?.(before, estimateTokens(next));
+    return true;
+  }
+
   // Runs one user turn until the model stops calling tools. Returns the final answer text.
   // If the signal fires, the turn stops and the history is left valid for the next turn.
   async run(input: string, ev: AgentEvents, signal?: AbortSignal): Promise<string> {
@@ -63,6 +84,14 @@ export class Agent {
     const maxSteps = this.opts.maxSteps ?? 25;
 
     for (let step = 0; step < maxSteps; step++) {
+      if (estimateTokens(this.messages) > (this.opts.contextTokens ?? 100_000) * 0.75) {
+        try {
+          await this.compact(ev, signal);
+        } catch (err) {
+          if (signal?.aborted) return "";
+          throw new Error(`Couldn't compact the conversation: ${(err as Error).message}`);
+        }
+      }
       const { content, calls } = await this.callModel(ev, signal);
       if (signal?.aborted) return content;
       if (!calls.length) return content;

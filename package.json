@@ -1,12 +1,13 @@
 {
   "name": "my_agent",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A coding agent for your terminal",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "dev": "tsx src/cli.tsx",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "build": "tsup",
+    "prepare": "tsup"
   },
   "keywords": [],
   "author": "",
@@ -27,7 +28,18 @@
     "@types/node": "^26.6.5",
     "@types/react": "^19.3.0",
     "ink-testing-library": "^4.0.0",
+    "tsup": "^9.0.0",
     "tsx": "^4.23.15",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "bin": {
+    "my-agent": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
   }
 }

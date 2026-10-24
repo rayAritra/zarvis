@@ -1,11 +1,8 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { randomBytes } from "node:crypto";
 import type { Msg } from "./loop.js";
-
-// Everything my-agent stores lives here. MY_AGENT_HOME overrides it (the tests use that).
-export const HOME_DIR = process.env.MY_AGENT_HOME ?? path.join(os.homedir(), ".my-agent");
+import { HOME_DIR } from "./config.js";
 
 export interface SessionData {
   id: string;

@@ -1,7 +1,7 @@
-import "dotenv/config";
 import { parseArgs } from "node:util";
 import { render } from "ink";
 import OpenAI from "openai";
+import { loadConfig } from "./config.js";
 import { Agent } from "./loop.js";
 import { Session } from "./session.js";
 import { App } from "./ui/App.js";
@@ -15,47 +15,62 @@ Options:
   -s, --session <id>    Continue a specific session
   -h, --help            Show this help`;
 
-const { values: flags } = parseArgs({
-  options: {
-    resume: { type: "boolean", short: "r" },
-    session: { type: "string", short: "s" },
-    help: { type: "boolean", short: "h" },
-  },
-});
+function fail(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
+
+let flags;
+try {
+  flags = parseArgs({
+    options: {
+      resume: { type: "boolean", short: "r" },
+      session: { type: "string", short: "s" },
+      help: { type: "boolean", short: "h" },
+    },
+  }).values;
+} catch (err) {
+  fail(`${(err as Error).message}\n\n${HELP}`);
+}
 
 if (flags.help) {
   console.log(HELP);
   process.exit(0);
 }
 
-if (!process.stdin.isTTY) {
-  console.error("my-agent needs an interactive terminal.");
-  process.exit(1);
+let config;
+try {
+  config = loadConfig();
+} catch (err) {
+  fail((err as Error).message);
 }
 
-const model = process.env.MODEL!;
+if (!process.stdin.isTTY) fail("my-agent needs an interactive terminal.");
+
 const cwd = process.cwd();
 const agent = new Agent({
-  client: new OpenAI({ baseURL: process.env.BASE_URL, apiKey: process.env.API_KEY }),
-  model,
-  contextTokens: Number(process.env.CONTEXT_TOKENS) || undefined,
+  client: new OpenAI({ baseURL: config.baseURL, apiKey: config.apiKey }),
+  model: config.model,
+  contextTokens: config.contextTokens,
 });
 
 let session: Session;
 const intro: Entry[] = [];
 if (flags.session || flags.resume) {
-  const found = flags.session ? Session.load(flags.session) : Session.latest(cwd);
-  if (!found) {
-    console.error("No earlier session in this folder to resume.");
-    process.exit(1);
+  let found: Session | null;
+  try {
+    found = flags.session ? Session.load(flags.session) : Session.latest(cwd);
+  } catch (err) {
+    fail((err as Error).message);
   }
+  if (!found) fail("No earlier session in this folder to resume.");
   session = found;
   agent.load(session.data.messages);
   intro.push(...historyEntries(session.data.messages));
   intro.push({ kind: "info", text: `Resumed session ${session.data.id}.` });
 } else {
-  session = Session.create(cwd, model);
+  session = Session.create(cwd, config.model);
 }
 
-const app = render(<App agent={agent} model={model} session={session} intro={intro} />, { exitOnCtrlC: false });
+const app = render(<App agent={agent} model={config.model} session={session} intro={intro} />, { exitOnCtrlC: false });
 await app.waitUntilExit();

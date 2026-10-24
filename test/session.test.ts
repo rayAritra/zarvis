@@ -16,12 +16,14 @@ afterEach(() => dirs.splice(0).forEach((d) => fs.rmSync(d, { recursive: true, fo
 const msgs = (text: string): any[] => [
   { role: "system", content: "s" },
   { role: "user", content: text },
+  { role: "assistant", content: "ok" },
 ];
 
 describe("Session", () => {
-  it("doesn't save a conversation with nothing in it", () => {
+  it("doesn't save a conversation the model never answered", () => {
     const dir = tempDir();
     Session.create("/project", "m", dir).save([{ role: "system", content: "s" }]);
+    Session.create("/project", "m", dir).save([{ role: "system", content: "s" }, { role: "user", content: "failed request" }]);
     expect(fs.readdirSync(dir)).toEqual([]);
   });
 

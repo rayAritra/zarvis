@@ -52,7 +52,7 @@ export class Session {
 
   // Writes to a temp file first, so a crash mid-save can't corrupt the session.
   save(messages: Msg[]) {
-    if (messages.length <= 1) return; // nothing but the system prompt
+    if (!messages.some((m) => m.role === "assistant")) return; // the model never answered, e.g. the request failed
     this.data.messages = messages;
     this.data.updatedAt = new Date().toISOString();
     fs.mkdirSync(this.dir, { recursive: true });

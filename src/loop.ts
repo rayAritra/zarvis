@@ -1,0 +1,74 @@
+import OpenAI from "openai";
+import { toolSchemas, getTool, parseArgs, runTool } from "./tools/index.js";
+
+type Msg = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+export type Confirm = (question: string) => Promise<boolean>;
+
+const client = new OpenAI({ baseURL: process.env.BASE_URL, apiKey: process.env.API_KEY });
+
+const messages: Msg[] = [
+  {
+    role: "system",
+    content:
+      `You are a coding agent running in the user's terminal. Working directory: ${process.cwd()}. ` +
+      `OS: ${process.platform}. The bash tool uses a bash shell. ` +
+      `Explore with list_files and grep, read files before editing them, prefer edit_file over write_file, ` +
+      `and run tests after changes. Keep answers short.`,
+  },
+];
+
+export async function runTurn(userInput: string, confirm: Confirm) {
+  messages.push({ role: "user", content: userInput });
+
+  for (let step = 0; step < 25; step++) {
+    const res = await client.chat.completions.create({
+      model: process.env.MODEL!,
+      messages,
+      tools: toolSchemas,
+    });
+
+    const msg = res.choices[0].message;
+    messages.push(msg);
+
+    if (!msg.tool_calls?.length) {
+      console.log(`\n${msg.content ?? ""}\n`);
+      return;
+    }
+
+    for (const call of msg.tool_calls) {
+      if (call.type !== "function") continue;
+      const result = await handleCall(call.function.name, call.function.arguments, confirm);
+      messages.push({ role: "tool", tool_call_id: call.id, content: result });
+    }
+  }
+  console.log("Stopped after 25 steps.");
+}
+
+async function handleCall(name: string, rawArgs: string, confirm: Confirm): Promise<string> {
+  const tool = getTool(name);
+  if (!tool) return `Error: unknown tool "${name}".`;
+
+  let args: any;
+  try {
+    args = parseArgs(tool, rawArgs);
+  } catch (e) {
+    return `Error: ${(e as Error).message}`;
+  }
+
+  console.log(`  → ${name} ${JSON.stringify(args).slice(0, 120)}`);
+
+  if (tool.risk !== "read") {
+    if (tool.preview) {
+      try {
+        console.log(await tool.preview(args));
+      } catch (e) {
+        return `Error: ${(e as Error).message}`;
+      }
+    }
+    if (!(await confirm(`  Allow ${name}? (y/n) `))) {
+      return "The user denied this action. Ask them how they want to proceed.";
+    }
+  }
+
+  return runTool(tool, args);
+}

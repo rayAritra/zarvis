@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import { render } from "ink";
 import OpenAI from "openai";
 import { loadConfig } from "./config.js";
+import { firstRunSetup } from "./setup.js";
 import { Agent } from "./loop.js";
 import { Session } from "./session.js";
 import { tools } from "./tools/index.js";
@@ -50,7 +51,14 @@ let config;
 try {
   config = loadConfig();
 } catch (err) {
-  fail((err as Error).message);
+  // Nothing configured yet: on a terminal, ask for it once instead of failing.
+  if (!process.stdin.isTTY || flags.print !== undefined) fail((err as Error).message);
+  try {
+    await firstRunSetup();
+    config = loadConfig();
+  } catch (e) {
+    fail((e as Error).message);
+  }
 }
 
 const headless = flags.print !== undefined;

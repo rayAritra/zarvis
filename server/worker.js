@@ -1,5 +1,5 @@
 // Zarvis proxy (Cloudflare Worker). Holds the real API key so users never need one.
-// Secrets/vars (set with wrangler): OPENROUTER_KEY (secret), MODEL (e.g. poolside/laguna-s-2.1:free).
+// Secrets/vars (set with wrangler): OPENROUTER_KEY (secret), MODELS (comma-separated, tried in order).
 
 const UPSTREAM = "https://openrouter.ai/api/v1/chat/completions";
 const MAX_BODY = 1_000_000; // bytes
@@ -28,14 +28,18 @@ export default {
     }
 
     // The server decides the model and the output cap; the client's choice is ignored.
-    body.model = env.MODEL;
     body.max_tokens = Math.min(body.max_tokens ?? MAX_OUTPUT_TOKENS, MAX_OUTPUT_TOKENS);
 
-    const upstream = await fetch(UPSTREAM, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENROUTER_KEY}` },
-      body: JSON.stringify(body),
-    });
+    // Free models get rate-limited now and then, so move on to the next one instead of failing.
+    let upstream;
+    for (const model of env.MODELS.split(",").map((m) => m.trim())) {
+      upstream = await fetch(UPSTREAM, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${env.OPENROUTER_KEY}` },
+        body: JSON.stringify({ ...body, model }),
+      });
+      if (upstream.status !== 429 && upstream.status < 500) break;
+    }
     return new Response(upstream.body, { status: upstream.status, headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" } });
   },
 };

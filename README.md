@@ -60,7 +60,7 @@ npm run build       # rebuild dist/, which the linked command runs
 
 ## Hosting it for others (no key needed)
 
-`server/worker.js` is a small Cloudflare Worker that holds your API key and forwards requests, so people who install Zarvis never need a key. It picks the model, caps the output size and limits each IP to 30 requests a minute.
+`server/worker.js` is a small Cloudflare Worker that holds your API key and forwards requests, so people who install Zarvis never need a key. It tries several free models in order (falling back when one is rate-limited), caps the output size and limits each IP to 30 requests a minute.
 
 ```bash
 cd server

@@ -3,7 +3,7 @@ main = "worker.js"
 compatibility_date = "2026-01-01"
 
 [vars]
-MODEL = "poolside/laguna-s-2.1:free"
+MODELS = "cohere/north-mini-code:free,nvidia/nemotron-3-ultra-550b-a55b:free,recursive/flint-v1.0:free,poolside/laguna-xs-2.1:free"
 
 # 30 requests per minute per IP. (Check the current syntax in Cloudflare's docs if deploy complains.)
 [[ratelimits]]

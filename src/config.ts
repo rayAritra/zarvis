@@ -10,8 +10,8 @@ export const PACKAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.u
 export const HOME_DIR = process.env.ZARVIS_HOME ?? path.join(os.homedir(), ".zarvis");
 
 // The hosted server that holds the shared key, so a fresh install works with no setup.
-// Fill this in after deploying server/worker.js. Users can override it with ZARVIS_PROXY.
-export const DEFAULT_PROXY = "";
+// Deployed from server/worker.js. Users can override it with ZARVIS_PROXY.
+export const DEFAULT_PROXY = "https://zarvis-proxy.aritra-sohan.workers.dev";
 
 export interface Config {
   baseURL: string;

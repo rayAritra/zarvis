@@ -1,0 +1,12 @@
+name = "zarvis-proxy"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[vars]
+MODEL = "poolside/laguna-s-2.1:free"
+
+# 30 requests per minute per IP. (Check the current syntax in Cloudflare's docs if deploy complains.)
+[[ratelimits]]
+name = "RL"
+namespace_id = "1001"
+simple = { limit = 30, period = 60 }

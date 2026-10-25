@@ -57,3 +57,24 @@ npm test            # tests use a scripted fake model, so no API calls
 npm run typecheck
 npm run build       # rebuild dist/, which the linked command runs
 ```
+
+## Hosting it for others (no key needed)
+
+`server/worker.js` is a small Cloudflare Worker that holds your API key and forwards requests, so people who install Zarvis never need a key. It picks the model, caps the output size and limits each IP to 30 requests a minute.
+
+```bash
+cd server
+npx wrangler login
+npx wrangler secret put OPENROUTER_KEY    # paste your key; it stays on Cloudflare
+npx wrangler deploy                       # prints your worker URL
+```
+
+Then put that URL in `DEFAULT_PROXY` in `src/config.ts`, commit and push. After that, anyone can install and run it with no setup:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/rayAritra/zarvis/main/scripts/install.sh | sh     # macOS / Linux
+irm https://raw.githubusercontent.com/rayAritra/zarvis/main/scripts/install.ps1 | iex           # Windows PowerShell
+zarvis
+```
+
+People with their own key can still set `API_KEY` and `MODEL`; that takes priority over the hosted server. Set a spending limit on the key you give the worker.

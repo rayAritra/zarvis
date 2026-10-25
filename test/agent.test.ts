@@ -176,3 +176,18 @@ describe("Agent", () => {
     expect(agent.messages).toHaveLength(1);
   });
 });
+
+describe("Agent after compaction", () => {
+  it("must read a file again before editing it", async () => {
+    const { readTimes } = await import("../src/tools/types.js");
+    const long = (tag: string) => `${tag} ` + "lorem ipsum ".repeat(250);
+    const { agent } = setup([long("answer1"), long("answer2"), "final"], { contextTokens: 2000 });
+    const ev = events();
+    await agent.run(long("question1"), ev);
+    readTimes.set("/some/file.ts", 123); // pretend a file was read
+    expect(ev.onCompact).not.toHaveBeenCalled();
+    await agent.run(long("question2"), ev); // this turn compacts
+    expect(ev.onCompact).toHaveBeenCalled();
+    expect(readTimes.size).toBe(0);
+  });
+});

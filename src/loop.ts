@@ -1,6 +1,6 @@
 import type OpenAI from "openai";
 import { tools as defaultTools, toolSchemas, parseArgs, runTool } from "./tools/index.js";
-import type { Tool } from "./tools/types.js";
+import { readTimes, type Tool } from "./tools/types.js";
 import { Permissions } from "./permissions.js";
 import { buildSystemPrompt } from "./prompts.js";
 import { compactMessages, estimateTokens } from "./compact.js";
@@ -76,6 +76,8 @@ export class Agent {
     const next = await compactMessages(this.opts.client, this.opts.model, this.messages, limit * 0.25, signal);
     if (!next) return false;
     this.messages = next;
+    // The summary drops the file contents the model saw, so make it read a file again before editing it.
+    readTimes.clear();
     ev?.onCompact?.(before, estimateTokens(next));
     return true;
   }
